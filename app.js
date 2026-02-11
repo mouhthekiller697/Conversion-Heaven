@@ -258,8 +258,10 @@
                 }
             });
             slideFiles.sort(function (a, b) {
-                var numA = parseInt(a.match(/slide(\d+)/i)[1], 10);
-                var numB = parseInt(b.match(/slide(\d+)/i)[1], 10);
+                var matchA = a.match(/slide(\d+)/i);
+                var matchB = b.match(/slide(\d+)/i);
+                var numA = matchA ? parseInt(matchA[1], 10) : 0;
+                var numB = matchB ? parseInt(matchB[1], 10) : 0;
                 return numA - numB;
             });
 
