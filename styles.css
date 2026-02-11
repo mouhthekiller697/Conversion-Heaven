@@ -135,8 +135,9 @@ body {
 
 /* ---------- Cards Grid ---------- */
 .cards-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
     gap: 1.6rem;
 }
 
@@ -154,6 +155,10 @@ body {
     flex-direction: column;
     align-items: center;
     gap: 0.6rem;
+    width: 100%;
+    max-width: 320px;
+    min-width: 260px;
+    flex: 0 1 calc(33.333% - 1.6rem);
 }
 
 .card:nth-child(1) { animation-delay: 0.05s; }
@@ -380,12 +385,12 @@ body {
     font-size: 0.78rem;
 }
 
-.github-profile-btn {
+.site-footer a.github-profile-btn {
     display: inline-block;
     margin-top: 1rem;
     padding: 0.6rem 1.4rem;
     background: var(--btn-bg);
-    color: var(--btn-text);
+    color: #fff;
     border: none;
     border-radius: 8px;
     font-size: 0.95rem;
@@ -395,11 +400,19 @@ body {
     cursor: pointer;
 }
 
-.github-profile-btn:hover {
+.site-footer a.github-profile-btn:hover {
     background: var(--accent-hover);
-    color: var(--btn-text);
+    color: #fff;
     text-decoration: none;
     transform: translateY(-2px);
+}
+
+/* ---------- Visitor Counter ---------- */
+.visitor-counter {
+    margin-top: 1rem;
+    font-size: 0.92rem;
+    color: var(--text-primary);
+    font-weight: 600;
 }
 
 /* ---------- Animations ---------- */
@@ -447,10 +460,9 @@ body {
     .hero {
         padding: 3.5rem 1rem 1.4rem;
     }
-    .cards-grid {
-        grid-template-columns: 1fr;
-    }
     .card {
+        flex: 0 1 100%;
+        max-width: 100%;
         padding: 1.5rem 1.2rem;
     }
 }

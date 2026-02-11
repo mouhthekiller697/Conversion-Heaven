@@ -519,15 +519,28 @@
         }
     }
 
+    /* ---------- Helper: check if file is a .webm ---------- */
+    function isWebmFile(file) {
+        var ext = file.name.split('.').pop().toLowerCase();
+        return ext === 'webm' || file.type === 'video/webm';
+    }
+
     /* ---------- Conversion: Video → Audio (offline, always MP3) ---------- */
     async function convertVideoToAudio(file, btnEvent) {
+        /* Reject .webm files – they typically contain no audio track */
+        if (isWebmFile(file)) {
+            alert("WebM files are not supported for audio extraction because they often contain no audio track. Please upload an MP4, MOV, AVI, or MKV file instead.");
+            return;
+        }
+
         showLoading();
         try {
             checkLibraries(["lamejs"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
-            var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            var audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-            audioCtx.close();
+
+            /* Use OfflineAudioContext to decode without routing to audio hardware */
+            var offlineCtx = new OfflineAudioContext(1, 1, 44100);
+            var audioBuffer = await offlineCtx.decodeAudioData(arrayBuffer);
 
             /* Convert decoded audio to WAV, then encode to MP3 with lamejs */
             var numChannels = audioBuffer.numberOfChannels;
@@ -595,6 +608,11 @@
         var selectedFile = null;
 
         function selectFile(file) {
+            /* Block .webm files for video-to-audio */
+            if (type === 'video-to-audio' && isWebmFile(file)) {
+                alert("WebM files are not supported for audio extraction because they often contain no audio track. Please upload an MP4, MOV, AVI, or MKV file instead.");
+                return;
+            }
             selectedFile = file;
             fileNameSpan.textContent = file.name;
             convertBtn.disabled = false;
@@ -680,5 +698,18 @@
             }
         });
     });
+
+    /* ---------- Visitor Counter ---------- */
+    (function initVisitorCounter() {
+        var countEl = document.getElementById("visitorCount");
+        if (!countEl) return;
+        var count = parseInt(localStorage.getItem("ch-visitor-count") || "0", 10);
+        if (!sessionStorage.getItem("ch-visited")) {
+            count++;
+            localStorage.setItem("ch-visitor-count", count);
+            sessionStorage.setItem("ch-visited", "1");
+        }
+        countEl.textContent = count;
+    })();
 
 })();
