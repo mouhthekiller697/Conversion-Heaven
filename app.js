@@ -518,10 +518,10 @@
                 }
             }
 
-            /* Encode to MP3 using lamejs */
+            /* Encode to MP3 using lamejs (128 kbps) */
             var mp3enc = new lamejs.Mp3Encoder(numChannels > 1 ? 2 : 1, sampleRate, 128);
             var mp3Data = [];
-            var blockSize = 1152;
+            var blockSize = 1152; /* standard MP3 frame size */
             for (var i = 0; i < numSamples; i += blockSize) {
                 var leftChunk = left.subarray(i, i + blockSize);
                 var rightChunk = numChannels > 1 ? right.subarray(i, i + blockSize) : leftChunk;
