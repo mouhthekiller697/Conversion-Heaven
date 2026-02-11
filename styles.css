@@ -191,7 +191,6 @@ body {
 /* ---------- Upload Button ---------- */
 .upload-btn {
     display: inline-block;
-    margin-top: 0.4rem;
     padding: 0.55rem 1.3rem;
     background: var(--upload-bg);
     border: 1px dashed var(--upload-border);
@@ -206,6 +205,33 @@ body {
 .upload-btn:hover {
     background: rgba(168, 85, 247, 0.25);
     transform: scale(1.04);
+}
+
+/* ---------- Drop Zone ---------- */
+.drop-zone {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.4rem;
+    padding: 1rem;
+    border: 2px dashed var(--upload-border);
+    border-radius: 0.8rem;
+    background: var(--upload-bg);
+    transition: border-color 0.25s ease, background 0.25s ease, transform 0.2s ease;
+    width: 100%;
+}
+
+.drop-zone.drag-over {
+    border-color: var(--accent);
+    background: rgba(168, 85, 247, 0.20);
+    transform: scale(1.03);
+}
+
+.drop-hint {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    font-weight: 400;
 }
 
 .file-name {
