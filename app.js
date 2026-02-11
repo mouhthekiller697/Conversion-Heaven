@@ -214,29 +214,6 @@
         }
     }
 
-    /* ---------- Conversion: PDF → Word ---------- */
-    async function convertPdfToWord(file, btnEvent) {
-        showLoading();
-        try {
-            checkLibraries(["pdfjsLib", "htmlDocx"]);
-            var arrayBuffer = await readFileAsArrayBuffer(file);
-            var pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            var fullText = "";
-            for (var i = 1; i <= pdf.numPages; i++) {
-                var page = await pdf.getPage(i);
-                var content = await page.getTextContent();
-                var pageText = content.items.map(function (item) { return item.str; }).join(" ");
-                fullText += "<p>" + pageText + "</p>";
-            }
-            var converted = window.htmlDocx.asBlob("<html><body>" + fullText + "</body></html>");
-            triggerDownload(converted, file.name.replace(/\.pdf$/i, "") + ".docx", btnEvent);
-        } catch (err) {
-            alert("Conversion failed: " + err.message);
-        } finally {
-            hideLoading();
-        }
-    }
-
     /* ---------- Conversion: PPT → PDF ---------- */
     async function convertPptToPdf(file, btnEvent) {
         showLoading();
@@ -398,24 +375,56 @@
     async function convertPdfToImage(file, btnEvent) {
         showLoading();
         try {
-            checkLibraries(["pdfjsLib"]);
+            checkLibraries(["pdfjsLib", "JSZip"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-            var page = await pdf.getPage(1);
-            var scale = 2;
-            var viewport = page.getViewport({ scale: scale });
-            var canvas = document.createElement("canvas");
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-            var context = canvas.getContext("2d");
-            await page.render({ canvasContext: context, viewport: viewport }).promise;
+            var numPages = pdf.numPages;
 
-            await new Promise(function (resolve) {
-                canvas.toBlob(function (blob) {
-                    triggerDownload(blob, file.name.replace(/\.pdf$/i, "") + ".png", btnEvent);
-                    resolve();
-                }, "image/png");
-            });
+            if (numPages === 1) {
+                /* Single page - download as single PNG */
+                var page = await pdf.getPage(1);
+                var scale = 2;
+                var viewport = page.getViewport({ scale: scale });
+                var canvas = document.createElement("canvas");
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                var context = canvas.getContext("2d");
+                await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+                await new Promise(function (resolve) {
+                    canvas.toBlob(function (blob) {
+                        triggerDownload(blob, file.name.replace(/\.pdf$/i, "") + ".png", btnEvent);
+                        resolve();
+                    }, "image/png");
+                });
+            } else {
+                /* Multiple pages - create ZIP file with all images */
+                var zip = new JSZip();
+                var baseName = file.name.replace(/\.pdf$/i, "");
+
+                for (var i = 1; i <= numPages; i++) {
+                    var page = await pdf.getPage(i);
+                    var scale = 2;
+                    var viewport = page.getViewport({ scale: scale });
+                    var canvas = document.createElement("canvas");
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    var context = canvas.getContext("2d");
+                    await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+                    /* Convert canvas to blob */
+                    var blob = await new Promise(function (resolve) {
+                        canvas.toBlob(resolve, "image/png");
+                    });
+
+                    /* Add to ZIP with page number */
+                    zip.file(baseName + "_page_" + i + ".png", blob);
+                }
+
+                /* Generate ZIP file */
+                var zipBlob = await zip.generateAsync({ type: "blob" });
+                triggerDownload(zipBlob, baseName + "_images.zip", btnEvent);
+            }
         } catch (err) {
             alert("Conversion failed: " + err.message);
         } finally {
@@ -452,16 +461,31 @@
         }
     }
 
-    /* ---------- Conversion: CSV → Excel ---------- */
-    async function convertCsvToExcel(file, btnEvent) {
+    /* ---------- Conversion: TXT → Word ---------- */
+    async function convertTxtToWord(file, btnEvent) {
         showLoading();
         try {
-            checkLibraries(["XLSX"]);
+            checkLibraries(["htmlDocx"]);
             var text = await readFileAsText(file);
-            var workbook = XLSX.read(text, { type: "string" });
-            var wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
-            var blob = new Blob([wbout], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-            triggerDownload(blob, file.name.replace(/\.csv$/i, "") + ".xlsx", btnEvent);
+            
+            /* Convert plain text to HTML with proper formatting */
+            var htmlContent = text
+                .split('\n')
+                .map(function(line) {
+                    /* Escape HTML special characters */
+                    var escaped = line
+                        .replace(/&/g, '&amp;')
+                        .replace(/</g, '&lt;')
+                        .replace(/>/g, '&gt;')
+                        .replace(/"/g, '&quot;')
+                        .replace(/'/g, '&#039;');
+                    return '<p>' + (escaped || '&nbsp;') + '</p>';
+                })
+                .join('');
+            
+            var htmlDoc = '<html><head><meta charset="utf-8"></head><body>' + htmlContent + '</body></html>';
+            var converted = window.htmlDocx.asBlob(htmlDoc);
+            triggerDownload(converted, file.name.replace(/\.txt$/i, "") + ".docx", btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
         } finally {
@@ -609,13 +633,12 @@
     /* ---------- Conversion dispatcher ---------- */
     var CONVERTERS = {
         "word-to-pdf": convertWordToPdf,
-        "pdf-to-word": convertPdfToWord,
         "ppt-to-pdf": convertPptToPdf,
         "excel-to-pdf": convertExcelToPdf,
         "image-to-pdf": convertImageToPdf,
         "pdf-to-image": convertPdfToImage,
         "txt-to-pdf": convertTxtToPdf,
-        "csv-to-excel": convertCsvToExcel,
+        "txt-to-word": convertTxtToWord,
         "video-to-audio": convertVideoToAudio,
         "audio-to-video": convertAudioToVideo
     };
