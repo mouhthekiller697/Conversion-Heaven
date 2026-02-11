@@ -610,24 +610,59 @@
 
         /* ---------- Drag & Drop ---------- */
         if (dropZone) {
+            var dragCounter = 0;
+            var acceptAttr = input.getAttribute("accept") || "";
+
+            function isFileAccepted(file) {
+                if (!acceptAttr) return true;
+                var accepts = acceptAttr.split(",").map(function (s) { return s.trim().toLowerCase(); });
+                var fileName = file.name.toLowerCase();
+                var fileType = (file.type || "").toLowerCase();
+                return accepts.some(function (a) {
+                    if (a.startsWith(".")) {
+                        return fileName.endsWith(a);
+                    }
+                    if (a.endsWith("/*")) {
+                        return fileType.startsWith(a.replace("/*", "/"));
+                    }
+                    return fileType === a;
+                });
+            }
+
             dropZone.addEventListener("dragover", function (e) {
                 e.preventDefault();
                 e.stopPropagation();
+            });
+
+            dropZone.addEventListener("dragenter", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dragCounter++;
                 dropZone.classList.add("drag-over");
             });
 
             dropZone.addEventListener("dragleave", function (e) {
                 e.preventDefault();
                 e.stopPropagation();
-                dropZone.classList.remove("drag-over");
+                dragCounter--;
+                if (dragCounter <= 0) {
+                    dragCounter = 0;
+                    dropZone.classList.remove("drag-over");
+                }
             });
 
             dropZone.addEventListener("drop", function (e) {
                 e.preventDefault();
                 e.stopPropagation();
+                dragCounter = 0;
                 dropZone.classList.remove("drag-over");
                 if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    selectFile(e.dataTransfer.files[0]);
+                    var droppedFile = e.dataTransfer.files[0];
+                    if (isFileAccepted(droppedFile)) {
+                        selectFile(droppedFile);
+                    } else {
+                        alert("Invalid file type. Please drop a supported file (" + acceptAttr + ").");
+                    }
                 }
             });
         }
