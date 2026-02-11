@@ -263,7 +263,7 @@
             }
 
             var blob = doc.output("blob");
-            triggerDownload(blob, file.name.replace(/\.(pptx?|ppt)$/i, "") + ".pdf", btnEvent);
+            triggerDownload(blob, file.name.replace(/\.pptx?$/i, "") + ".pdf", btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
         } finally {
@@ -308,7 +308,7 @@
             });
 
             var blob = doc.output("blob");
-            triggerDownload(blob, file.name.replace(/\.(xlsx?|xls)$/i, "") + ".pdf", btnEvent);
+            triggerDownload(blob, file.name.replace(/\.xlsx?$/i, "") + ".pdf", btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
         } finally {
