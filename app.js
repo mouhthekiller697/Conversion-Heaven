@@ -160,7 +160,8 @@
             "mammoth": function () { return typeof mammoth !== "undefined"; },
             "htmlDocx": function () { return window.htmlDocx && window.htmlDocx.asBlob; },
             "XLSX": function () { return typeof XLSX !== "undefined"; },
-            "pdfjsLib": function () { return typeof pdfjsLib !== "undefined"; }
+            "pdfjsLib": function () { return typeof pdfjsLib !== "undefined"; },
+            "JSZip": function () { return typeof JSZip !== "undefined"; }
         };
         for (var i = 0; i < names.length; i++) {
             if (libs[names[i]] && !libs[names[i]]()) {
@@ -240,52 +241,62 @@
     async function convertPptToPdf(file, btnEvent) {
         showLoading();
         try {
-            checkLibraries(["jspdf", "XLSX"]);
+            checkLibraries(["jspdf", "JSZip"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var jsPDF = window.jspdf.jsPDF;
             var doc = new jsPDF({ unit: "pt", format: "a4" });
 
-            /* Read PPT XML content using JSZip embedded in xlsx */
-            var workbook;
-            try {
-                workbook = XLSX.read(arrayBuffer, { type: "array" });
-            } catch (_e) {
-                /* If XLSX can't read it, just extract raw text */
-                workbook = null;
-            }
+            /* PPTX is a ZIP containing XML slides */
+            var zip = await JSZip.loadAsync(arrayBuffer);
+            var slideTexts = [];
 
-            var text = "";
-            if (workbook && workbook.SheetNames && workbook.SheetNames.length > 0) {
-                workbook.SheetNames.forEach(function (name) {
-                    var sheet = workbook.Sheets[name];
-                    text += XLSX.utils.sheet_to_txt(sheet) + "\n\n";
-                });
-            } else {
-                /* Fallback: treat as binary, extract visible text */
-                var bytes = new Uint8Array(arrayBuffer);
-                var raw = "";
-                for (var i = 0; i < bytes.length; i++) {
-                    var ch = bytes[i];
-                    if (ch >= 32 && ch < 127) raw += String.fromCharCode(ch);
-                    else if (ch === 10 || ch === 13) raw += "\n";
+            /* Gather slide file names and sort them */
+            var slideFiles = [];
+            zip.forEach(function (relativePath) {
+                if (/^ppt\/slides\/slide\d+\.xml$/i.test(relativePath)) {
+                    slideFiles.push(relativePath);
                 }
-                text = raw.replace(/[^\x20-\x7E\n]/g, "").replace(/\n{3,}/g, "\n\n");
+            });
+            slideFiles.sort(function (a, b) {
+                var matchA = a.match(/slide(\d+)/i);
+                var matchB = b.match(/slide(\d+)/i);
+                var numA = matchA ? parseInt(matchA[1], 10) : 0;
+                var numB = matchB ? parseInt(matchB[1], 10) : 0;
+                return numA - numB;
+            });
+
+            for (var s = 0; s < slideFiles.length; s++) {
+                var xml = await zip.file(slideFiles[s]).async("string");
+                /* Strip XML tags to extract text content */
+                var text = xml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+                slideTexts.push(text);
             }
 
-            if (!text.trim()) {
-                text = "(Slide content was extracted from " + file.name + ")";
+            if (slideTexts.length === 0) {
+                slideTexts.push("(No slide content could be extracted from " + file.name + ")");
             }
 
-            var lines = doc.splitTextToSize(text, 500);
             var y = 40;
             var pageHeight = doc.internal.pageSize.getHeight();
-            for (var j = 0; j < lines.length; j++) {
-                if (y > pageHeight - 40) {
+
+            for (var i = 0; i < slideTexts.length; i++) {
+                if (i > 0) {
                     doc.addPage();
                     y = 40;
                 }
-                doc.text(lines[j], 40, y);
-                y += 16;
+                doc.setFontSize(14);
+                doc.text("Slide " + (i + 1), 40, y);
+                y += 24;
+                doc.setFontSize(10);
+                var lines = doc.splitTextToSize(slideTexts[i], 500);
+                for (var j = 0; j < lines.length; j++) {
+                    if (y > pageHeight - 40) {
+                        doc.addPage();
+                        y = 40;
+                    }
+                    doc.text(lines[j], 40, y);
+                    y += 14;
+                }
             }
 
             var blob = doc.output("blob");
@@ -348,6 +359,13 @@
         showLoading();
         try {
             checkLibraries(["jspdf"]);
+
+            /* Only allow PNG and JPEG */
+            var fileType = (file.type || "").toLowerCase();
+            if (fileType !== "image/png" && fileType !== "image/jpeg") {
+                throw new Error("Only PNG and JPEG images are supported for Image to PDF conversion.");
+            }
+
             var dataUrl = await readFileAsDataURL(file);
             var jsPDF = window.jspdf.jsPDF;
             var doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -364,7 +382,8 @@
             var ratio = Math.min(pageW / img.width, pageH / img.height, 1);
             var w = img.width * ratio;
             var h = img.height * ratio;
-            doc.addImage(dataUrl, "JPEG", 40, 40, w, h);
+            var format = fileType === "image/png" ? "PNG" : "JPEG";
+            doc.addImage(dataUrl, format, 40, 40, w, h);
 
             var blob = doc.output("blob");
             triggerDownload(blob, file.name.replace(/\.[^.]+$/, "") + ".pdf", btnEvent);
@@ -469,7 +488,12 @@
             var dest = audioCtx.createMediaStreamDestination();
             source.connect(dest);
 
-            var recorder = new MediaRecorder(dest.stream, { mimeType: "audio/webm" });
+            var mimeType = "audio/webm";
+            if (typeof MediaRecorder !== "undefined" && !MediaRecorder.isTypeSupported(mimeType)) {
+                mimeType = MediaRecorder.isTypeSupported("audio/ogg") ? "audio/ogg" : "";
+            }
+            var recorderOptions = mimeType ? { mimeType: mimeType } : {};
+            var recorder = new MediaRecorder(dest.stream, recorderOptions);
             var chunks = [];
             recorder.ondataavailable = function (e) { if (e.data.size > 0) chunks.push(e.data); };
 
@@ -487,8 +511,10 @@
             audioCtx.close();
             URL.revokeObjectURL(url);
 
-            var blob = new Blob(chunks, { type: "audio/webm" });
-            triggerDownload(blob, file.name.replace(/\.[^.]+$/, "") + ".webm", btnEvent);
+            var actualMime = mimeType || "audio/webm";
+            var ext = actualMime.indexOf("ogg") !== -1 ? ".ogg" : ".webm";
+            var blob = new Blob(chunks, { type: actualMime });
+            triggerDownload(blob, file.name.replace(/\.[^.]+$/, "") + ext, btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
         } finally {
@@ -528,7 +554,12 @@
             source.connect(audioDest);
             audioDest.stream.getAudioTracks().forEach(function (t) { videoStream.addTrack(t); });
 
-            var recorder = new MediaRecorder(videoStream, { mimeType: "video/webm" });
+            var vidMimeType = "video/webm";
+            if (typeof MediaRecorder !== "undefined" && !MediaRecorder.isTypeSupported(vidMimeType)) {
+                vidMimeType = MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "";
+            }
+            var vidRecorderOptions = vidMimeType ? { mimeType: vidMimeType } : {};
+            var recorder = new MediaRecorder(videoStream, vidRecorderOptions);
             var chunks = [];
             recorder.ondataavailable = function (e) { if (e.data.size > 0) chunks.push(e.data); };
             var done = new Promise(function (resolve) { recorder.onstop = resolve; });
@@ -564,8 +595,10 @@
             audioCtx.close();
             URL.revokeObjectURL(url);
 
-            var blob = new Blob(chunks, { type: "video/webm" });
-            triggerDownload(blob, file.name.replace(/\.[^.]+$/, "") + ".webm", btnEvent);
+            var vidActualMime = vidMimeType || "video/webm";
+            var vidExt = vidActualMime.indexOf("mp4") !== -1 ? ".mp4" : ".webm";
+            var blob = new Blob(chunks, { type: vidActualMime });
+            triggerDownload(blob, file.name.replace(/\.[^.]+$/, "") + vidExt, btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
         } finally {
