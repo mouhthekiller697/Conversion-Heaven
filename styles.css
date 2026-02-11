@@ -380,6 +380,28 @@ body {
     font-size: 0.78rem;
 }
 
+.github-profile-btn {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.6rem 1.4rem;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    border: none;
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: background 0.2s ease, transform 0.15s ease;
+    cursor: pointer;
+}
+
+.github-profile-btn:hover {
+    background: var(--accent-hover);
+    color: var(--btn-text);
+    text-decoration: none;
+    transform: translateY(-2px);
+}
+
 /* ---------- Animations ---------- */
 @keyframes fadeSlideDown {
     from {
