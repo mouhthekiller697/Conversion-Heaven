@@ -156,7 +156,7 @@
     function checkLibraries(names) {
         var missing = [];
         var libs = {
-            "jspdf": function () { return window.jspdf && window.jspdf.jsPDF; },
+            "pdf-lib": function () { return window.PDFLib; },
             "mammoth": function () { return typeof mammoth !== "undefined"; },
             "htmlDocx": function () { return window.htmlDocx && window.htmlDocx.asBlob; },
             "XLSX": function () { return typeof XLSX !== "undefined"; },
@@ -182,7 +182,7 @@
     async function convertWordToPdf(file, btnEvent) {
         showLoading();
         try {
-            checkLibraries(["mammoth", "jspdf", "html2canvas"]);
+            checkLibraries(["mammoth", "pdf-lib", "html2canvas"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
             var html = result.value;
@@ -196,24 +196,33 @@
             var canvas = await html2canvas(container, { scale: 2, useCORS: true });
             document.body.removeChild(container);
 
-            var imgData = canvas.toDataURL("image/jpeg", 0.95);
-            var jsPDF = window.jspdf.jsPDF;
+            var pngDataUrl = canvas.toDataURL("image/png");
+            var pngBytes = Uint8Array.from(atob(pngDataUrl.split(",")[1]), function (c) { return c.charCodeAt(0); });
+
+            var PDFLib = window.PDFLib;
+            var pdfDoc = await PDFLib.PDFDocument.create();
+            var pngImage = await pdfDoc.embedPng(pngBytes);
+
             var pageW = 595.28; /* A4 width in pt */
             var pageH = 841.89; /* A4 height in pt */
             var imgW = pageW;
-            var imgH = (canvas.height * pageW) / canvas.width;
-
-            var doc = new jsPDF({ unit: "pt", format: "a4" });
-            var position = 0;
+            var imgH = (pngImage.height * pageW) / pngImage.width;
 
             /* Paginate the captured image across multiple PDF pages */
+            var position = 0;
             while (position < imgH) {
-                if (position > 0) doc.addPage();
-                doc.addImage(imgData, "JPEG", 0, -position, imgW, imgH);
+                var page = pdfDoc.addPage([pageW, pageH]);
+                page.drawImage(pngImage, {
+                    x: 0,
+                    y: pageH - imgH + position,
+                    width: imgW,
+                    height: imgH
+                });
                 position += pageH;
             }
 
-            var blob = doc.output("blob");
+            var pdfBytes = await pdfDoc.save();
+            var blob = new Blob([pdfBytes], { type: "application/pdf" });
             triggerDownload(blob, file.name.replace(/\.docx?$/i, "") + ".pdf", btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
@@ -226,9 +235,8 @@
     async function convertPptToPdf(file, btnEvent) {
         showLoading();
         try {
-            checkLibraries(["jspdf", "JSZip", "html2canvas"]);
+            checkLibraries(["pdf-lib", "JSZip", "html2canvas"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
-            var jsPDF = window.jspdf.jsPDF;
 
             /* PPTX is a ZIP containing XML slides */
             var zip = await JSZip.loadAsync(arrayBuffer);
@@ -267,14 +275,13 @@
                 slideTexts.push(["(No slide content could be extracted from " + file.name + ")"]);
             }
 
-            /* Build an HTML representation of each slide and render via html2canvas */
-            var doc = new jsPDF({ unit: "pt", format: [720, 540], orientation: "landscape" });
+            var PDFLib = window.PDFLib;
+            var pdfDoc = await PDFLib.PDFDocument.create();
             var pageW = 720;
             var pageH = 540;
 
+            /* Build an HTML representation of each slide and render via html2canvas */
             for (var i = 0; i < slideTexts.length; i++) {
-                if (i > 0) doc.addPage([720, 540], "landscape");
-
                 var container = document.createElement("div");
                 container.style.cssText = "position:fixed;left:-9999px;top:0;width:720px;height:540px;background:#fff;color:#000;font-family:sans-serif;display:flex;flex-direction:column;justify-content:center;padding:40px;box-sizing:border-box;";
 
@@ -295,11 +302,16 @@
                 var canvas = await html2canvas(container, { scale: 2, useCORS: true, width: 720, height: 540 });
                 document.body.removeChild(container);
 
-                var imgData = canvas.toDataURL("image/jpeg", 0.95);
-                doc.addImage(imgData, "JPEG", 0, 0, pageW, pageH);
+                var pngDataUrl = canvas.toDataURL("image/png");
+                var pngBytes = Uint8Array.from(atob(pngDataUrl.split(",")[1]), function (c) { return c.charCodeAt(0); });
+                var pngImage = await pdfDoc.embedPng(pngBytes);
+
+                var page = pdfDoc.addPage([pageW, pageH]);
+                page.drawImage(pngImage, { x: 0, y: 0, width: pageW, height: pageH });
             }
 
-            var blob = doc.output("blob");
+            var pdfBytes = await pdfDoc.save();
+            var blob = new Blob([pdfBytes], { type: "application/pdf" });
             triggerDownload(blob, file.name.replace(/\.pptx?$/i, "") + ".pdf", btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
@@ -312,40 +324,50 @@
     async function convertExcelToPdf(file, btnEvent) {
         showLoading();
         try {
-            checkLibraries(["jspdf", "XLSX"]);
+            checkLibraries(["pdf-lib", "XLSX"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var workbook = XLSX.read(arrayBuffer, { type: "array" });
 
-            var jsPDF = window.jspdf.jsPDF;
-            var doc = new jsPDF({ unit: "pt", format: "a4" });
+            var PDFLib = window.PDFLib;
+            var pdfDoc = await PDFLib.PDFDocument.create();
+            var font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+            var boldFont = await pdfDoc.embedFont(PDFLib.StandardFonts.HelveticaBold);
 
-            var y = 40;
-            var pageHeight = doc.internal.pageSize.getHeight();
+            var pageW = 595.28; /* A4 width */
+            var pageH = 841.89; /* A4 height */
+            var margin = 40;
+            var fontSize = 10;
+            var titleSize = 14;
+            var lineHeight = fontSize * 1.4;
 
-            workbook.SheetNames.forEach(function (name, idx) {
-                if (idx > 0) {
-                    doc.addPage();
-                    y = 40;
-                }
-                doc.setFontSize(14);
-                doc.text("Sheet: " + name, 40, y);
-                y += 24;
-                doc.setFontSize(10);
+            workbook.SheetNames.forEach(function (name) {
+                var page = pdfDoc.addPage([pageW, pageH]);
+                var y = pageH - margin;
+
+                /* Sheet title */
+                page.drawText("Sheet: " + name, { x: margin, y: y, size: titleSize, font: boldFont, color: PDFLib.rgb(0, 0, 0) });
+                y -= titleSize + 10;
 
                 var sheet = workbook.Sheets[name];
                 var text = XLSX.utils.sheet_to_csv(sheet);
-                var lines = doc.splitTextToSize(text, 500);
+                var lines = text.split("\n");
+
                 for (var i = 0; i < lines.length; i++) {
-                    if (y > pageHeight - 40) {
-                        doc.addPage();
-                        y = 40;
+                    if (y < margin + lineHeight) {
+                        page = pdfDoc.addPage([pageW, pageH]);
+                        y = pageH - margin;
                     }
-                    doc.text(lines[i], 40, y);
-                    y += 14;
+                    /* Truncate long lines to fit page width */
+                    var line = lines[i];
+                    var maxChars = Math.floor((pageW - 2 * margin) / (fontSize * 0.5));
+                    if (line.length > maxChars) line = line.substring(0, maxChars) + "…";
+                    page.drawText(line, { x: margin, y: y, size: fontSize, font: font, color: PDFLib.rgb(0, 0, 0) });
+                    y -= lineHeight;
                 }
             });
 
-            var blob = doc.output("blob");
+            var pdfBytes = await pdfDoc.save();
+            var blob = new Blob([pdfBytes], { type: "application/pdf" });
             triggerDownload(blob, file.name.replace(/\.xlsx?$/i, "") + ".pdf", btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
@@ -358,7 +380,7 @@
     async function convertImageToPdf(file, btnEvent) {
         showLoading();
         try {
-            checkLibraries(["jspdf"]);
+            checkLibraries(["pdf-lib"]);
 
             /* Only allow PNG and JPEG */
             var fileType = (file.type || "").toLowerCase();
@@ -366,26 +388,36 @@
                 throw new Error("Only PNG and JPEG images are supported for Image to PDF conversion.");
             }
 
-            var dataUrl = await readFileAsDataURL(file);
-            var jsPDF = window.jspdf.jsPDF;
-            var doc = new jsPDF({ unit: "pt", format: "a4" });
+            var imageBytes = await readFileAsArrayBuffer(file);
 
-            var img = new Image();
-            await new Promise(function (resolve, reject) {
-                img.onload = resolve;
-                img.onerror = reject;
-                img.src = dataUrl;
+            var PDFLib = window.PDFLib;
+            var pdfDoc = await PDFLib.PDFDocument.create();
+
+            var image;
+            if (fileType === "image/png") {
+                image = await pdfDoc.embedPng(imageBytes);
+            } else {
+                image = await pdfDoc.embedJpg(imageBytes);
+            }
+
+            var pageW = 595.28; /* A4 width */
+            var pageH = 841.89; /* A4 height */
+            var maxW = pageW - 80;
+            var maxH = pageH - 80;
+            var ratio = Math.min(maxW / image.width, maxH / image.height, 1);
+            var w = image.width * ratio;
+            var h = image.height * ratio;
+
+            var page = pdfDoc.addPage([pageW, pageH]);
+            page.drawImage(image, {
+                x: 40,
+                y: pageH - 40 - h,
+                width: w,
+                height: h
             });
 
-            var pageW = doc.internal.pageSize.getWidth() - 80;
-            var pageH = doc.internal.pageSize.getHeight() - 80;
-            var ratio = Math.min(pageW / img.width, pageH / img.height, 1);
-            var w = img.width * ratio;
-            var h = img.height * ratio;
-            var format = fileType === "image/png" ? "PNG" : "JPEG";
-            doc.addImage(dataUrl, format, 40, 40, w, h);
-
-            var blob = doc.output("blob");
+            var pdfBytes = await pdfDoc.save();
+            var blob = new Blob([pdfBytes], { type: "application/pdf" });
             triggerDownload(blob, file.name.replace(/\.[^.]+$/, "") + ".pdf", btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
