@@ -161,7 +161,9 @@
             "htmlDocx": function () { return window.htmlDocx && window.htmlDocx.asBlob; },
             "XLSX": function () { return typeof XLSX !== "undefined"; },
             "pdfjsLib": function () { return typeof pdfjsLib !== "undefined"; },
-            "JSZip": function () { return typeof JSZip !== "undefined"; }
+            "JSZip": function () { return typeof JSZip !== "undefined"; },
+            "html2canvas": function () { return typeof html2canvas !== "undefined"; },
+            "lamejs": function () { return typeof lamejs !== "undefined"; }
         };
         for (var i = 0; i < names.length; i++) {
             if (libs[names[i]] && !libs[names[i]]()) {
@@ -180,29 +182,35 @@
     async function convertWordToPdf(file, btnEvent) {
         showLoading();
         try {
-            checkLibraries(["mammoth", "jspdf"]);
+            checkLibraries(["mammoth", "jspdf", "html2canvas"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
             var html = result.value;
 
+            /* Render HTML in a hidden container so html2canvas can capture it */
+            var container = document.createElement("div");
+            container.style.cssText = "position:fixed;left:-9999px;top:0;width:595px;padding:40px;background:#fff;color:#000;font-family:serif;font-size:12pt;line-height:1.6;";
+            container.innerHTML = html;
+            document.body.appendChild(container);
+
+            var canvas = await html2canvas(container, { scale: 2, useCORS: true });
+            document.body.removeChild(container);
+
+            var imgData = canvas.toDataURL("image/jpeg", 0.95);
             var jsPDF = window.jspdf.jsPDF;
+            var pageW = 595.28; /* A4 width in pt */
+            var pageH = 841.89; /* A4 height in pt */
+            var imgW = pageW;
+            var imgH = (canvas.height * pageW) / canvas.width;
+
             var doc = new jsPDF({ unit: "pt", format: "a4" });
+            var position = 0;
 
-            /* Strip HTML to plain text for jsPDF */
-            var tempDiv = document.createElement("div");
-            tempDiv.innerHTML = html;
-            var text = tempDiv.textContent || tempDiv.innerText || "";
-
-            var lines = doc.splitTextToSize(text, 500);
-            var y = 40;
-            var pageHeight = doc.internal.pageSize.getHeight();
-            for (var i = 0; i < lines.length; i++) {
-                if (y > pageHeight - 40) {
-                    doc.addPage();
-                    y = 40;
-                }
-                doc.text(lines[i], 40, y);
-                y += 16;
+            /* Paginate the captured image across multiple PDF pages */
+            while (position < imgH) {
+                if (position > 0) doc.addPage();
+                doc.addImage(imgData, "JPEG", 0, -position, imgW, imgH);
+                position += pageH;
             }
 
             var blob = doc.output("blob");
@@ -218,10 +226,9 @@
     async function convertPptToPdf(file, btnEvent) {
         showLoading();
         try {
-            checkLibraries(["jspdf", "JSZip"]);
+            checkLibraries(["jspdf", "JSZip", "html2canvas"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var jsPDF = window.jspdf.jsPDF;
-            var doc = new jsPDF({ unit: "pt", format: "a4" });
 
             /* PPTX is a ZIP containing XML slides */
             var zip = await JSZip.loadAsync(arrayBuffer);
@@ -244,36 +251,52 @@
 
             for (var s = 0; s < slideFiles.length; s++) {
                 var xml = await zip.file(slideFiles[s]).async("string");
-                /* Strip XML tags to extract text content */
-                var text = xml.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-                slideTexts.push(text);
+                /* Parse XML and extract text from <a:t> elements (DrawingML text) */
+                var parser = new DOMParser();
+                var xmlDoc = parser.parseFromString(xml, "application/xml");
+                var textNodes = xmlDoc.getElementsByTagNameNS("http://schemas.openxmlformats.org/drawingml/2006/main", "t");
+                var parts = [];
+                for (var t = 0; t < textNodes.length; t++) {
+                    var content = textNodes[t].textContent || "";
+                    if (content.trim()) parts.push(content.trim());
+                }
+                slideTexts.push(parts);
             }
 
             if (slideTexts.length === 0) {
-                slideTexts.push("(No slide content could be extracted from " + file.name + ")");
+                slideTexts.push(["(No slide content could be extracted from " + file.name + ")"]);
             }
 
-            var y = 40;
-            var pageHeight = doc.internal.pageSize.getHeight();
+            /* Build an HTML representation of each slide and render via html2canvas */
+            var doc = new jsPDF({ unit: "pt", format: [720, 540], orientation: "landscape" });
+            var pageW = 720;
+            var pageH = 540;
 
             for (var i = 0; i < slideTexts.length; i++) {
-                if (i > 0) {
-                    doc.addPage();
-                    y = 40;
+                if (i > 0) doc.addPage([720, 540], "landscape");
+
+                var container = document.createElement("div");
+                container.style.cssText = "position:fixed;left:-9999px;top:0;width:720px;height:540px;background:#fff;color:#000;font-family:sans-serif;display:flex;flex-direction:column;justify-content:center;padding:40px;box-sizing:border-box;";
+
+                var titleEl = document.createElement("div");
+                titleEl.style.cssText = "font-size:24px;font-weight:bold;margin-bottom:20px;color:#333;";
+                titleEl.textContent = "Slide " + (i + 1);
+                container.appendChild(titleEl);
+
+                var textParts = slideTexts[i];
+                for (var p = 0; p < textParts.length; p++) {
+                    var line = document.createElement("div");
+                    line.style.cssText = "font-size:14px;margin-bottom:8px;color:#222;line-height:1.5;";
+                    line.textContent = textParts[p];
+                    container.appendChild(line);
                 }
-                doc.setFontSize(14);
-                doc.text("Slide " + (i + 1), 40, y);
-                y += 24;
-                doc.setFontSize(10);
-                var lines = doc.splitTextToSize(slideTexts[i], 500);
-                for (var j = 0; j < lines.length; j++) {
-                    if (y > pageHeight - 40) {
-                        doc.addPage();
-                        y = 40;
-                    }
-                    doc.text(lines[j], 40, y);
-                    y += 14;
-                }
+
+                document.body.appendChild(container);
+                var canvas = await html2canvas(container, { scale: 2, useCORS: true, width: 720, height: 540 });
+                document.body.removeChild(container);
+
+                var imgData = canvas.toDataURL("image/jpeg", 0.95);
+                doc.addImage(imgData, "JPEG", 0, 0, pageW, pageH);
             }
 
             var blob = doc.output("blob");
@@ -432,35 +455,6 @@
         }
     }
 
-    /* ---------- Conversion: TXT → PDF ---------- */
-    async function convertTxtToPdf(file, btnEvent) {
-        showLoading();
-        try {
-            checkLibraries(["jspdf"]);
-            var text = await readFileAsText(file);
-            var jsPDF = window.jspdf.jsPDF;
-            var doc = new jsPDF({ unit: "pt", format: "a4" });
-            doc.setFontSize(11);
-            var lines = doc.splitTextToSize(text, 500);
-            var y = 40;
-            var pageHeight = doc.internal.pageSize.getHeight();
-            for (var i = 0; i < lines.length; i++) {
-                if (y > pageHeight - 40) {
-                    doc.addPage();
-                    y = 40;
-                }
-                doc.text(lines[i], 40, y);
-                y += 15;
-            }
-            var blob = doc.output("blob");
-            triggerDownload(blob, file.name.replace(/\.txt$/i, "") + ".pdf", btnEvent);
-        } catch (err) {
-            alert("Conversion failed: " + err.message);
-        } finally {
-            hideLoading();
-        }
-    }
-
     /* ---------- Conversion: TXT → Word ---------- */
     async function convertTxtToWord(file, btnEvent) {
         showLoading();
@@ -493,136 +487,54 @@
         }
     }
 
-    /* ---------- Conversion: Video → Audio ---------- */
+    /* ---------- Conversion: Video → Audio (offline, always MP3) ---------- */
     async function convertVideoToAudio(file, btnEvent) {
         showLoading();
         try {
-            var url = URL.createObjectURL(file);
-            var video = document.createElement("video");
-            video.src = url;
-            video.muted = true;
-
-            await new Promise(function (resolve, reject) {
-                video.onloadedmetadata = resolve;
-                video.onerror = reject;
-            });
-
+            checkLibraries(["lamejs"]);
+            var arrayBuffer = await readFileAsArrayBuffer(file);
             var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            var source = audioCtx.createMediaElementSource(video);
-            var dest = audioCtx.createMediaStreamDestination();
-            source.connect(dest);
-
-            var mimeType = "audio/webm";
-            if (typeof MediaRecorder !== "undefined" && !MediaRecorder.isTypeSupported(mimeType)) {
-                mimeType = MediaRecorder.isTypeSupported("audio/ogg") ? "audio/ogg" : "";
-            }
-            var recorderOptions = mimeType ? { mimeType: mimeType } : {};
-            var recorder = new MediaRecorder(dest.stream, recorderOptions);
-            var chunks = [];
-            recorder.ondataavailable = function (e) { if (e.data.size > 0) chunks.push(e.data); };
-
-            var done = new Promise(function (resolve) { recorder.onstop = resolve; });
-            recorder.start();
-            video.currentTime = 0;
-            video.muted = false;
-            await video.play();
-
-            /* Wait for video to finish */
-            await new Promise(function (resolve) { video.onended = resolve; });
-            recorder.stop();
-            await done;
-
+            var audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
             audioCtx.close();
-            URL.revokeObjectURL(url);
 
-            var actualMime = mimeType || "audio/webm";
-            var ext = actualMime.indexOf("ogg") !== -1 ? ".ogg" : ".webm";
-            var blob = new Blob(chunks, { type: actualMime });
-            triggerDownload(blob, file.name.replace(/\.[^.]+$/, "") + ext, btnEvent);
-        } catch (err) {
-            alert("Conversion failed: " + err.message);
-        } finally {
-            hideLoading();
-        }
-    }
-
-    /* ---------- Conversion: Audio → Video ---------- */
-    async function convertAudioToVideo(file, btnEvent) {
-        showLoading();
-        try {
-            var url = URL.createObjectURL(file);
-            var audio = document.createElement("audio");
-            audio.src = url;
-
-            await new Promise(function (resolve, reject) {
-                audio.onloadedmetadata = resolve;
-                audio.onerror = reject;
-            });
-
-            /* Create a simple canvas with a waveform-like visual */
-            var canvas = document.createElement("canvas");
-            canvas.width = 1280;
-            canvas.height = 720;
-            var canvasCtx = canvas.getContext("2d");
-
-            var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            var source = audioCtx.createMediaElementSource(audio);
-            var analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 256;
-            source.connect(analyser);
-            analyser.connect(audioCtx.destination);
-
-            var videoStream = canvas.captureStream(30);
-            /* Merge audio */
-            var audioDest = audioCtx.createMediaStreamDestination();
-            source.connect(audioDest);
-            audioDest.stream.getAudioTracks().forEach(function (t) { videoStream.addTrack(t); });
-
-            var vidMimeType = "video/webm";
-            if (typeof MediaRecorder !== "undefined" && !MediaRecorder.isTypeSupported(vidMimeType)) {
-                vidMimeType = MediaRecorder.isTypeSupported("video/mp4") ? "video/mp4" : "";
+            /* Convert decoded audio to WAV, then encode to MP3 with lamejs */
+            var numChannels = audioBuffer.numberOfChannels;
+            var sampleRate = audioBuffer.sampleRate;
+            var channels = [];
+            for (var c = 0; c < numChannels; c++) {
+                channels.push(audioBuffer.getChannelData(c));
             }
-            var vidRecorderOptions = vidMimeType ? { mimeType: vidMimeType } : {};
-            var recorder = new MediaRecorder(videoStream, vidRecorderOptions);
-            var chunks = [];
-            recorder.ondataavailable = function (e) { if (e.data.size > 0) chunks.push(e.data); };
-            var done = new Promise(function (resolve) { recorder.onstop = resolve; });
 
-            recorder.start();
-            await audio.play();
-
-            /* Draw visualizer */
-            var bufferLength = analyser.frequencyBinCount;
-            var dataArray = new Uint8Array(bufferLength);
-            var animId;
-            function draw() {
-                animId = requestAnimationFrame(draw);
-                analyser.getByteFrequencyData(dataArray);
-                canvasCtx.fillStyle = "#1a0030";
-                canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
-                var barWidth = (canvas.width / bufferLength) * 2.5;
-                var x = 0;
-                for (var i = 0; i < bufferLength; i++) {
-                    var barHeight = dataArray[i] * 2;
-                    canvasCtx.fillStyle = "hsl(" + (i * 3) + ", 80%, 60%)";
-                    canvasCtx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
-                    x += barWidth + 1;
+            /* Convert float samples to 16-bit PCM */
+            var numSamples = audioBuffer.length;
+            var left = new Int16Array(numSamples);
+            var right = numChannels > 1 ? new Int16Array(numSamples) : left;
+            for (var i = 0; i < numSamples; i++) {
+                var s = Math.max(-1, Math.min(1, channels[0][i]));
+                left[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+                if (numChannels > 1) {
+                    s = Math.max(-1, Math.min(1, channels[1][i]));
+                    right[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                 }
             }
-            draw();
 
-            await new Promise(function (resolve) { audio.onended = resolve; });
-            cancelAnimationFrame(animId);
-            recorder.stop();
-            await done;
+            /* Encode to MP3 using lamejs */
+            var mp3enc = new lamejs.Mp3Encoder(numChannels > 1 ? 2 : 1, sampleRate, 128);
+            var mp3Data = [];
+            var blockSize = 1152;
+            for (var i = 0; i < numSamples; i += blockSize) {
+                var leftChunk = left.subarray(i, i + blockSize);
+                var rightChunk = numChannels > 1 ? right.subarray(i, i + blockSize) : leftChunk;
+                var mp3buf = numChannels > 1
+                    ? mp3enc.encodeBuffer(leftChunk, rightChunk)
+                    : mp3enc.encodeBuffer(leftChunk);
+                if (mp3buf.length > 0) mp3Data.push(mp3buf);
+            }
+            var end = mp3enc.flush();
+            if (end.length > 0) mp3Data.push(end);
 
-            audioCtx.close();
-            URL.revokeObjectURL(url);
-
-            var vidActualMime = vidMimeType || "video/webm";
-            var vidExt = vidActualMime.indexOf("mp4") !== -1 ? ".mp4" : ".webm";
-            var blob = new Blob(chunks, { type: vidActualMime });
-            triggerDownload(blob, file.name.replace(/\.[^.]+$/, "") + vidExt, btnEvent);
+            var blob = new Blob(mp3Data, { type: "audio/mpeg" });
+            triggerDownload(blob, file.name.replace(/\.[^.]+$/, "") + ".mp3", btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
         } finally {
@@ -637,10 +549,8 @@
         "excel-to-pdf": convertExcelToPdf,
         "image-to-pdf": convertImageToPdf,
         "pdf-to-image": convertPdfToImage,
-        "txt-to-pdf": convertTxtToPdf,
         "txt-to-word": convertTxtToWord,
-        "video-to-audio": convertVideoToAudio,
-        "audio-to-video": convertAudioToVideo
+        "video-to-audio": convertVideoToAudio
     };
 
     /* ---------- Wire up cards ---------- */

@@ -119,21 +119,6 @@
                 <button class="convert-btn" disabled>Convert &amp; Download</button>
             </div>
 
-            <div class="card" data-conversion="txt-to-pdf">
-                <div class="card-icon">📃</div>
-                <h3>TXT → PDF</h3>
-                <p>Convert plain text to PDF</p>
-                <div class="drop-zone">
-                    <label class="upload-btn">
-                        Choose File
-                        <input type="file" accept=".txt" hidden>
-                    </label>
-                    <span class="drop-hint">or drag &amp; drop here</span>
-                </div>
-                <span class="file-name"></span>
-                <button class="convert-btn" disabled>Convert &amp; Download</button>
-            </div>
-
             <div class="card" data-conversion="txt-to-word">
                 <div class="card-icon">📝</div>
                 <h3>TXT → Word</h3>
@@ -165,21 +150,6 @@
                 <button class="convert-btn" disabled>Convert &amp; Download</button>
             </div>
 
-            <div class="card" data-conversion="audio-to-video">
-                <div class="card-icon">🎵</div>
-                <h3>Audio → Video</h3>
-                <p>Create a video from an audio file</p>
-                <div class="drop-zone">
-                    <label class="upload-btn">
-                        Choose File
-                        <input type="file" accept="audio/*" hidden>
-                    </label>
-                    <span class="drop-hint">or drag &amp; drop here</span>
-                </div>
-                <span class="file-name"></span>
-                <button class="convert-btn" disabled>Convert &amp; Download</button>
-            </div>
-
         </section>
     </main>
 
@@ -198,6 +168,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HucLxVwtxf26XV8P4wPk26EDxuGZ91N8bsOttmnomcCD3CS5ZMRL50H0GgOHvegtg==" crossorigin="anonymous"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js"></script>
     <script>
         if (typeof pdfjsLib !== 'undefined') {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
