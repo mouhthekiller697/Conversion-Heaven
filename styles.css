@@ -1,0 +1,408 @@
+/* ============================================================
+   Conversion Heaven – Styles
+   ============================================================ */
+
+/* ---------- CSS Variables (Dark / Light) ---------- */
+:root {
+    --bg-gradient: linear-gradient(135deg, #1a0030 0%, #0d0015 40%, #000 100%);
+    --card-bg: rgba(255, 255, 255, 0.06);
+    --card-border: rgba(255, 255, 255, 0.10);
+    --card-hover-border: rgba(168, 85, 247, 0.50);
+    --text-primary: #f0e6ff;
+    --text-secondary: #b49fcc;
+    --accent: #a855f7;
+    --accent-hover: #c084fc;
+    --btn-bg: #a855f7;
+    --btn-text: #fff;
+    --upload-bg: rgba(168, 85, 247, 0.15);
+    --upload-border: rgba(168, 85, 247, 0.40);
+    --footer-bg: rgba(0, 0, 0, 0.35);
+    --modal-bg: rgba(0, 0, 0, 0.80);
+    --modal-card: #1e1030;
+    --spinner-1: #a855f7;
+    --spinner-2: #ec4899;
+    --spinner-3: #3b82f6;
+    --spinner-4: #10b981;
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.40);
+}
+
+[data-theme="light"] {
+    --bg-gradient: linear-gradient(135deg, #e9d5ff 0%, #f3e8ff 40%, #faf5ff 100%);
+    --card-bg: rgba(255, 255, 255, 0.75);
+    --card-border: rgba(168, 85, 247, 0.18);
+    --card-hover-border: rgba(168, 85, 247, 0.55);
+    --text-primary: #1e1030;
+    --text-secondary: #5b4878;
+    --accent: #7c3aed;
+    --accent-hover: #6d28d9;
+    --btn-bg: #7c3aed;
+    --btn-text: #fff;
+    --upload-bg: rgba(124, 58, 237, 0.10);
+    --upload-border: rgba(124, 58, 237, 0.35);
+    --footer-bg: rgba(255, 255, 255, 0.45);
+    --modal-bg: rgba(0, 0, 0, 0.55);
+    --modal-card: #fff;
+    --shadow: 0 8px 32px rgba(124, 58, 237, 0.15);
+}
+
+/* ---------- Reset & Base ---------- */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg-gradient);
+    color: var(--text-primary);
+    min-height: 100vh;
+    overflow-x: hidden;
+    transition: background 0.5s ease, color 0.4s ease;
+}
+
+/* ---------- Particle Canvas ---------- */
+#particleCanvas {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+}
+
+/* ---------- Theme Toggle ---------- */
+.theme-toggle {
+    position: fixed;
+    top: 1.2rem;
+    right: 1.4rem;
+    z-index: 100;
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 50%;
+    width: 48px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.theme-toggle:hover {
+    transform: scale(1.12);
+    box-shadow: var(--shadow);
+}
+
+.theme-icon {
+    font-size: 1.35rem;
+    transition: transform 0.5s ease;
+}
+
+/* ---------- Hero Section ---------- */
+.hero {
+    text-align: center;
+    padding: 5rem 1.5rem 2rem;
+    animation: fadeSlideDown 0.9s ease both;
+}
+
+.hero-title {
+    font-size: clamp(2.4rem, 6vw, 4.2rem);
+    font-weight: 800;
+    background: linear-gradient(135deg, var(--accent), #ec4899, #3b82f6);
+    background-clip: text;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
+    margin-bottom: 0.6rem;
+}
+
+.hero-subtitle {
+    font-size: clamp(1rem, 2.5vw, 1.25rem);
+    color: var(--text-secondary);
+    font-weight: 400;
+}
+
+/* ---------- Container ---------- */
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 3rem;
+}
+
+/* ---------- Cards Grid ---------- */
+.cards-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 1.6rem;
+}
+
+/* ---------- Card ---------- */
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: 1.2rem;
+    padding: 2rem 1.6rem;
+    text-align: center;
+    backdrop-filter: blur(14px);
+    transition: transform 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+    animation: fadeSlideUp 0.7s ease both;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+}
+
+.card:nth-child(1) { animation-delay: 0.05s; }
+.card:nth-child(2) { animation-delay: 0.10s; }
+.card:nth-child(3) { animation-delay: 0.15s; }
+.card:nth-child(4) { animation-delay: 0.20s; }
+.card:nth-child(5) { animation-delay: 0.25s; }
+.card:nth-child(6) { animation-delay: 0.30s; }
+.card:nth-child(7) { animation-delay: 0.35s; }
+.card:nth-child(8) { animation-delay: 0.40s; }
+.card:nth-child(9) { animation-delay: 0.45s; }
+.card:nth-child(10) { animation-delay: 0.50s; }
+
+.card:hover {
+    transform: translateY(-6px);
+    border-color: var(--card-hover-border);
+    box-shadow: var(--shadow);
+}
+
+.card-icon {
+    font-size: 2.6rem;
+    margin-bottom: 0.3rem;
+}
+
+.card h3 {
+    font-size: 1.18rem;
+    font-weight: 700;
+}
+
+.card p {
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+}
+
+/* ---------- Upload Button ---------- */
+.upload-btn {
+    display: inline-block;
+    margin-top: 0.4rem;
+    padding: 0.55rem 1.3rem;
+    background: var(--upload-bg);
+    border: 1px dashed var(--upload-border);
+    border-radius: 0.6rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: var(--accent);
+    cursor: pointer;
+    transition: background 0.25s ease, transform 0.2s ease;
+}
+
+.upload-btn:hover {
+    background: rgba(168, 85, 247, 0.25);
+    transform: scale(1.04);
+}
+
+.file-name {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    word-break: break-all;
+    min-height: 1.1em;
+}
+
+/* ---------- Convert Button ---------- */
+.convert-btn {
+    margin-top: auto;
+    padding: 0.65rem 1.8rem;
+    border: none;
+    border-radius: 0.6rem;
+    font-size: 0.92rem;
+    font-weight: 600;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    cursor: pointer;
+    transition: background 0.25s ease, transform 0.2s ease, opacity 0.25s ease;
+}
+
+.convert-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.convert-btn:not(:disabled):hover {
+    background: var(--accent-hover);
+    transform: scale(1.05);
+}
+
+/* ---------- Loading Overlay ---------- */
+.loading-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 5000;
+    background: var(--modal-bg);
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1.4rem;
+}
+
+.loading-overlay.active {
+    display: flex;
+}
+
+.spinner {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 6px solid transparent;
+    border-top-color: var(--spinner-1);
+    border-right-color: var(--spinner-2);
+    border-bottom-color: var(--spinner-3);
+    border-left-color: var(--spinner-4);
+    animation: spin 1s linear infinite;
+}
+
+.loading-text {
+    font-size: 1.15rem;
+    color: #fff;
+    font-weight: 500;
+}
+
+/* ---------- Thank You Modal ---------- */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 8000;
+    background: var(--modal-bg);
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-overlay.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--modal-card);
+    padding: 2.8rem 3rem;
+    border-radius: 1.4rem;
+    text-align: center;
+    animation: scaleIn 0.4s ease both;
+    box-shadow: var(--shadow);
+}
+
+.modal-emoji {
+    font-size: 3.4rem;
+    display: block;
+    margin-bottom: 0.8rem;
+}
+
+.modal-content h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1.4rem;
+    color: var(--text-primary);
+}
+
+.modal-close-btn {
+    padding: 0.6rem 2rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: var(--btn-bg);
+    color: var(--btn-text);
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.25s ease;
+}
+
+.modal-close-btn:hover {
+    background: var(--accent-hover);
+}
+
+/* ---------- Footer ---------- */
+.site-footer {
+    text-align: center;
+    padding: 2rem 1.5rem;
+    background: var(--footer-bg);
+    backdrop-filter: blur(10px);
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+}
+
+.site-footer a {
+    color: var(--accent);
+    text-decoration: none;
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.site-footer a:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+}
+
+.footer-copy {
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+}
+
+/* ---------- Animations ---------- */
+@keyframes fadeSlideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes fadeSlideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes scaleIn {
+    from {
+        opacity: 0;
+        transform: scale(0.85);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 600px) {
+    .hero {
+        padding: 3.5rem 1rem 1.4rem;
+    }
+    .cards-grid {
+        grid-template-columns: 1fr;
+    }
+    .card {
+        padding: 1.5rem 1.2rem;
+    }
+}
