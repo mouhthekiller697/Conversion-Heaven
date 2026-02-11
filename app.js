@@ -152,10 +152,34 @@
         });
     }
 
+    /* ---------- Library availability check ---------- */
+    function checkLibraries(names) {
+        var missing = [];
+        var libs = {
+            "jspdf": function () { return window.jspdf && window.jspdf.jsPDF; },
+            "mammoth": function () { return typeof mammoth !== "undefined"; },
+            "htmlDocx": function () { return window.htmlDocx && window.htmlDocx.asBlob; },
+            "XLSX": function () { return typeof XLSX !== "undefined"; },
+            "pdfjsLib": function () { return typeof pdfjsLib !== "undefined"; }
+        };
+        for (var i = 0; i < names.length; i++) {
+            if (libs[names[i]] && !libs[names[i]]()) {
+                missing.push(names[i]);
+            }
+        }
+        if (missing.length > 0) {
+            throw new Error(
+                "Required libraries failed to load: " + missing.join(", ") +
+                ". Please check your internet connection and reload the page."
+            );
+        }
+    }
+
     /* ---------- Conversion: Word → PDF ---------- */
     async function convertWordToPdf(file, btnEvent) {
         showLoading();
         try {
+            checkLibraries(["mammoth", "jspdf"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
             var html = result.value;
@@ -193,6 +217,7 @@
     async function convertPdfToWord(file, btnEvent) {
         showLoading();
         try {
+            checkLibraries(["pdfjsLib", "htmlDocx"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             var fullText = "";
@@ -215,6 +240,7 @@
     async function convertPptToPdf(file, btnEvent) {
         showLoading();
         try {
+            checkLibraries(["jspdf", "XLSX"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var jsPDF = window.jspdf.jsPDF;
             var doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -275,6 +301,7 @@
     async function convertExcelToPdf(file, btnEvent) {
         showLoading();
         try {
+            checkLibraries(["jspdf", "XLSX"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var workbook = XLSX.read(arrayBuffer, { type: "array" });
 
@@ -320,6 +347,7 @@
     async function convertImageToPdf(file, btnEvent) {
         showLoading();
         try {
+            checkLibraries(["jspdf"]);
             var dataUrl = await readFileAsDataURL(file);
             var jsPDF = window.jspdf.jsPDF;
             var doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -351,6 +379,7 @@
     async function convertPdfToImage(file, btnEvent) {
         showLoading();
         try {
+            checkLibraries(["pdfjsLib"]);
             var arrayBuffer = await readFileAsArrayBuffer(file);
             var pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
             var page = await pdf.getPage(1);
@@ -362,9 +391,12 @@
             var context = canvas.getContext("2d");
             await page.render({ canvasContext: context, viewport: viewport }).promise;
 
-            canvas.toBlob(function (blob) {
-                triggerDownload(blob, file.name.replace(/\.pdf$/i, "") + ".png", btnEvent);
-            }, "image/png");
+            await new Promise(function (resolve) {
+                canvas.toBlob(function (blob) {
+                    triggerDownload(blob, file.name.replace(/\.pdf$/i, "") + ".png", btnEvent);
+                    resolve();
+                }, "image/png");
+            });
         } catch (err) {
             alert("Conversion failed: " + err.message);
         } finally {
@@ -376,6 +408,7 @@
     async function convertTxtToPdf(file, btnEvent) {
         showLoading();
         try {
+            checkLibraries(["jspdf"]);
             var text = await readFileAsText(file);
             var jsPDF = window.jspdf.jsPDF;
             var doc = new jsPDF({ unit: "pt", format: "a4" });
@@ -404,6 +437,7 @@
     async function convertCsvToExcel(file, btnEvent) {
         showLoading();
         try {
+            checkLibraries(["XLSX"]);
             var text = await readFileAsText(file);
             var workbook = XLSX.read(text, { type: "string" });
             var wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
@@ -500,7 +534,7 @@
             var done = new Promise(function (resolve) { recorder.onstop = resolve; });
 
             recorder.start();
-            audio.play();
+            await audio.play();
 
             /* Draw visualizer */
             var bufferLength = analyser.frequencyBinCount;
@@ -559,15 +593,44 @@
         var input = card.querySelector("input[type=file]");
         var fileNameSpan = card.querySelector(".file-name");
         var convertBtn = card.querySelector(".convert-btn");
+        var dropZone = card.querySelector(".drop-zone");
         var selectedFile = null;
+
+        function selectFile(file) {
+            selectedFile = file;
+            fileNameSpan.textContent = file.name;
+            convertBtn.disabled = false;
+        }
 
         input.addEventListener("change", function () {
             if (input.files && input.files.length > 0) {
-                selectedFile = input.files[0];
-                fileNameSpan.textContent = selectedFile.name;
-                convertBtn.disabled = false;
+                selectFile(input.files[0]);
             }
         });
+
+        /* ---------- Drag & Drop ---------- */
+        if (dropZone) {
+            dropZone.addEventListener("dragover", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.add("drag-over");
+            });
+
+            dropZone.addEventListener("dragleave", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove("drag-over");
+            });
+
+            dropZone.addEventListener("drop", function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dropZone.classList.remove("drag-over");
+                if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    selectFile(e.dataTransfer.files[0]);
+                }
+            });
+        }
 
         convertBtn.addEventListener("click", function (e) {
             if (!selectedFile) return;
