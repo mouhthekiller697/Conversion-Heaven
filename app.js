@@ -377,48 +377,57 @@
     }
 
     /* ---------- Conversion: Image → PDF ---------- */
-    async function convertImageToPdf(file, btnEvent) {
+    async function convertImageToPdf(files, btnEvent) {
         showLoading();
         try {
             checkLibraries(["pdf-lib"]);
-
-            /* Only allow PNG and JPEG */
-            var fileType = (file.type || "").toLowerCase();
-            if (fileType !== "image/png" && fileType !== "image/jpeg") {
-                throw new Error("Only PNG and JPEG images are supported for Image to PDF conversion.");
+            var imageFiles = Array.isArray(files) ? files : (files ? [files] : []);
+            if (imageFiles.length === 0) {
+                throw new Error("Please select at least one image.");
             }
-
-            var imageBytes = await readFileAsArrayBuffer(file);
 
             var PDFLib = window.PDFLib;
             var pdfDoc = await PDFLib.PDFDocument.create();
 
-            var image;
-            if (fileType === "image/png") {
-                image = await pdfDoc.embedPng(imageBytes);
-            } else {
-                image = await pdfDoc.embedJpg(imageBytes);
-            }
-
             var pageW = 595.28; /* A4 width */
             var pageH = 841.89; /* A4 height */
-            var maxW = pageW - 80;
-            var maxH = pageH - 80;
-            var ratio = Math.min(maxW / image.width, maxH / image.height, 1);
-            var w = image.width * ratio;
-            var h = image.height * ratio;
+            for (var i = 0; i < imageFiles.length; i++) {
+                var file = imageFiles[i];
+                var fileType = (file.type || "").toLowerCase();
+                var fileName = (file.name || "").toLowerCase();
+                var isPng = fileType === "image/png" || fileName.endsWith(".png");
+                var isJpg = fileType === "image/jpeg" || fileName.endsWith(".jpg") || fileName.endsWith(".jpeg");
 
-            var page = pdfDoc.addPage([pageW, pageH]);
-            page.drawImage(image, {
-                x: 40,
-                y: pageH - 40 - h,
-                width: w,
-                height: h
-            });
+                if (!isPng && !isJpg) {
+                    throw new Error("Only PNG and JPEG images are supported for Image to PDF conversion.");
+                }
+
+                var imageBytes = await readFileAsArrayBuffer(file);
+                var image = isPng
+                    ? await pdfDoc.embedPng(imageBytes)
+                    : await pdfDoc.embedJpg(imageBytes);
+
+                var maxW = pageW - 80;
+                var maxH = pageH - 80;
+                var ratio = Math.min(maxW / image.width, maxH / image.height, 1);
+                var w = image.width * ratio;
+                var h = image.height * ratio;
+
+                var page = pdfDoc.addPage([pageW, pageH]);
+                page.drawImage(image, {
+                    x: 40,
+                    y: pageH - 40 - h,
+                    width: w,
+                    height: h
+                });
+            }
 
             var pdfBytes = await pdfDoc.save();
             var blob = new Blob([pdfBytes], { type: "application/pdf" });
-            triggerDownload(blob, file.name.replace(/\.[^.]+$/, "") + ".pdf", btnEvent);
+            var outputName = imageFiles.length === 1
+                ? imageFiles[0].name.replace(/\.[^.]+$/, "") + ".pdf"
+                : "combined_images.pdf";
+            triggerDownload(blob, outputName, btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
         } finally {
@@ -605,22 +614,36 @@
         var fileNameSpan = card.querySelector(".file-name");
         var convertBtn = card.querySelector(".convert-btn");
         var dropZone = card.querySelector(".drop-zone");
-        var selectedFile = null;
+        var selectedFiles = [];
 
-        function selectFile(file) {
+        function selectFile(files) {
+            var normalizedFiles = Array.isArray(files) ? files : (files ? [files] : []);
+            if (normalizedFiles.length === 0) {
+                return;
+            }
+
             /* Block .webm files for video-to-audio */
-            if (type === 'video-to-audio' && isWebmFile(file)) {
+            if (type === "video-to-audio" && isWebmFile(normalizedFiles[0])) {
                 alert("WebM files are not supported for audio extraction because they often contain no audio track. Please upload an MP4, MOV, AVI, or MKV file instead.");
                 return;
             }
-            selectedFile = file;
-            fileNameSpan.textContent = file.name;
+
+            selectedFiles = normalizedFiles;
+            if (selectedFiles.length === 1) {
+                fileNameSpan.textContent = selectedFiles[0].name;
+            } else {
+                fileNameSpan.textContent = selectedFiles.length + " files selected";
+            }
             convertBtn.disabled = false;
         }
 
         input.addEventListener("change", function () {
             if (input.files && input.files.length > 0) {
-                selectFile(input.files[0]);
+                if (type === "image-to-pdf") {
+                    selectFile(Array.from(input.files));
+                } else {
+                    selectFile(input.files[0]);
+                }
             }
         });
 
@@ -673,24 +696,44 @@
                 dragCounter = 0;
                 dropZone.classList.remove("drag-over");
                 if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-                    var droppedFile = e.dataTransfer.files[0];
-                    if (isFileAccepted(droppedFile)) {
-                        selectFile(droppedFile);
+                    var droppedFiles = Array.from(e.dataTransfer.files);
+                    if (type === "image-to-pdf") {
+                        var acceptedFiles = droppedFiles.filter(isFileAccepted);
+                        if (acceptedFiles.length === 0) {
+                            alert("Invalid file type. Please drop a supported file (" + acceptAttr + ").");
+                            return;
+                        }
+                        if (acceptedFiles.length !== droppedFiles.length) {
+                            var ignoredFiles = droppedFiles
+                                .filter(function (f) { return !isFileAccepted(f); })
+                                .map(function (f) { return f.name; });
+                            alert(
+                                "Some dropped files were ignored (only PNG/JPEG are supported): " +
+                                ignoredFiles.join(", ")
+                            );
+                        }
+                        selectFile(acceptedFiles);
                     } else {
-                        alert("Invalid file type. Please drop a supported file (" + acceptAttr + ").");
+                        var droppedFile = droppedFiles[0];
+                        if (isFileAccepted(droppedFile)) {
+                            selectFile(droppedFile);
+                        } else {
+                            alert("Invalid file type. Please drop a supported file (" + acceptAttr + ").");
+                        }
                     }
                 }
             });
         }
 
         convertBtn.addEventListener("click", function (e) {
-            if (!selectedFile) return;
+            if (selectedFiles.length === 0) return;
             var converter = CONVERTERS[type];
             if (converter) {
-                converter(selectedFile, e);
+                var payload = type === "image-to-pdf" ? selectedFiles : selectedFiles[0];
+                converter(payload, e);
                 /* Clear file reference after conversion starts ("delete from database") */
                 setTimeout(function () {
-                    selectedFile = null;
+                    selectedFiles = [];
                     input.value = "";
                     fileNameSpan.textContent = "";
                     convertBtn.disabled = true;
