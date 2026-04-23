@@ -415,7 +415,7 @@
 
                 var page = pdfDoc.addPage([pageW, pageH]);
                 page.drawImage(image, {
-                    x: (pageW - w) / 2,
+                    x: 40,
                     y: pageH - 40 - h,
                     width: w,
                     height: h
@@ -426,7 +426,7 @@
             var blob = new Blob([pdfBytes], { type: "application/pdf" });
             var outputName = imageFiles.length === 1
                 ? imageFiles[0].name.replace(/\.[^.]+$/, "") + ".pdf"
-                : "images.pdf";
+                : "combined_images.pdf";
             triggerDownload(blob, outputName, btnEvent);
         } catch (err) {
             alert("Conversion failed: " + err.message);
