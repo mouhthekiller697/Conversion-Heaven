@@ -704,7 +704,13 @@
                             return;
                         }
                         if (acceptedFiles.length !== droppedFiles.length) {
-                            alert("Some dropped files were ignored because they are not supported.");
+                            var ignoredFiles = droppedFiles
+                                .filter(function (f) { return !isFileAccepted(f); })
+                                .map(function (f) { return f.name; });
+                            alert(
+                                "Some dropped files were ignored (only PNG/JPEG are supported): " +
+                                ignoredFiles.join(", ")
+                            );
                         }
                         selectFile(acceptedFiles);
                     } else {
